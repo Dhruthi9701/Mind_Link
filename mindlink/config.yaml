@@ -1,0 +1,52 @@
+# Mind Link Configuration
+# All hyperparameters and system settings
+
+input:
+  n_channels: 32
+  sample_rate: 250  # Hz
+  lsl_stream_name: "itie_EEG"
+  tcp_host: "192.168.1.100"
+  tcp_port: 5000
+  impedance_threshold_kohm: 5.0
+  buffer_size_seconds: 2.0
+
+processing:
+  bandpass_low: 8.0   # Hz
+  bandpass_high: 30.0  # Hz
+  pca_variance: 0.95
+  window_size_ms: 500
+  window_overlap: 0.5
+  notch_freq: 50.0  # Hz (60 for US)
+
+decoding:
+  n_qubits: 8
+  feature_map_reps: 1
+  entanglement: "linear"
+  max_circuit_depth: 30
+  quantum_timeout_ms: 100
+  confidence_threshold: 0.75
+  n_classes: 4  # Forward, Backward, Left, Right
+  classical:
+    n_estimators: 200
+    random_state: 42
+  physionet_subject: 1
+
+transmission:
+  mavlink_baud: 115200
+  ble_device_name: "DroneFC"
+  primary: "5g"  # "5g" or "wifi"
+  fallback: "ble"
+  max_latency_ms: 20
+
+safety:
+  beta_band_low: 13.0
+  beta_band_high: 30.0
+  drift_window_seconds: 5
+  drift_threshold_percent: 25.0
+  adaptive_update_interval_seconds: 10
+
+latency:
+  target_e2e_ms: 150
+  log_interval: 10  # log every N loops
+
+simulation_mode: true  # set false for real hardware

@@ -1,0 +1,68 @@
+flowchart TB
+ subgraph INPUT_UNIT["INPUT UNIT"]
+        A(["itie Full Headcap: 32-64 Channel EEG"])
+        B(["6-Axis IMU Sensors: Kinetic Tracking"])
+  end
+ subgraph PROCESSING_UNIT["PROCESSING UNIT"]
+        D["Synchronized Signal Processing: <br>BrainFlow, Raw Visualization, <br>PCA &amp; EMG Artifact Subtraction"]
+        G["Motion Correction: Bobble-Head Noise Filter"]
+        H["ZZFeatureMaps: Hilbert Space Projection"]
+  end
+ subgraph APPROACHES[" "]
+    direction LR
+        I1["APPROACH 2: <br>Classical Model <br>Standard ML Inference"]
+        I2["APPROACH 1: <br>QSVM Model <br>Qiskit Runtime Inference"]
+  end
+ subgraph DECODING_UNIT["DECODING UNIT"]
+        APPROACHES
+        J["Neural Intent Decoding: <br>Pitch/Yaw/Roll/Alt"]
+        K["Neural Modem: <br>Digital Protocol Encoding"]
+  end
+ subgraph TRANSMISSION_UNIT["TRANSMISSION UNIT"]
+        L["5G URLLC Transmission Layer"]
+        M["Bluetooth Connection"]
+  end
+ subgraph OUTPUT_UNIT["OUTPUT UNIT"]
+        N(["Drone Onboard Receiver & Flight Controller"])
+        O(["Physical Drone Navigation & Execution"])
+  end
+ subgraph SAFETY_UNIT["SAFETY AND FEEDBACK UNIT"]
+        P{"Beta-Wave Drift Monitor"}
+        Q["Adaptive Model Recalibration"]
+        R(["Automatic GPS Hover: Safety Kill-Switch"])
+  end
+
+    I1 --> J
+    I2 --> J
+    J --> K
+    A --> C[/"Neural-Kinetic Multimodal Data Stream/"/]
+    B --> C
+    C --> D
+    D --> G
+    G --> H
+    H --> I1 & I2
+    K --> L
+    L --> M
+    M --> N
+    N --> O
+    O --> P
+    P -- System Stable --> Q
+    Q -.-> DECODING_UNIT
+    P -- Fatigue Detected --> R
+
+    style A fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style B fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style D fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style G fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style H fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style I1 fill:#bbdefb,stroke:#0d47a1,stroke-width:2px
+    style I2 fill:#bbdefb,stroke:#0d47a1,stroke-width:2px
+    style APPROACHES fill:#fffde7,stroke:none
+    style J fill:#bbdefb,stroke:#0d47a1,stroke-width:2px
+    style K fill:#bbdefb,stroke:#0d47a1,stroke-width:2px
+    style N fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style O fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style DECODING_UNIT fill:#fffde7,stroke:#f9a825,stroke-width:2.5px
+    style R fill:#ffebee,stroke:#c62828,stroke-width:2px
+    style TRANSMISSION_UNIT fill:#fffde7,stroke:#f9a825,stroke-width:2px
+    style SAFETY_UNIT fill:#fffde7,stroke:#f9a825,stroke-width:2px
