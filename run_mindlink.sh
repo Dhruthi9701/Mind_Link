@@ -6,7 +6,6 @@
 PROJECT_ROOT=$(pwd)
 PYTHON_VENV="./bin/python"
 MAIN_SCRIPT="mindlink/main.py"
-SIM_SCRIPT="mindlink/drone_control/sim3d.py"
 MODELS_DIR="mindlink/models"
 
 # Colors for output
@@ -31,12 +30,13 @@ fi
 if [ ! -d "$MODELS_DIR" ] || [ ! -f "$MODELS_DIR/classical_model.pkl" ]; then
     echo -e "${YELLOW}[warning] Pre-trained models not found in $MODELS_DIR${NC}"
     echo "The system will auto-train on synthetic data if you start inference,"
-    echo "or you can run a full training pass [Option 4]."
+    echo "or you can run a full training pass [Option 5]."
     echo ""
 fi
 
 # 3. Interactive Menu
 echo "What would you like to start?"
+echo -e "  ${GREEN}[1]${NC} Main Orchestrator (Full 5-Unit Pipeline)"
 echo -e "  ${GREEN}[2]${NC} 3D Ursina Simulator (High Fidelity, Infinite Grid)"
 echo -e "  ${GREEN}[3]${NC} 3D Pygame Simulator (Legacy, Lightweight)"
 echo -e "  ${GREEN}[4]${NC} Pre-flight Hardware Checklist"
@@ -53,6 +53,7 @@ case $choice in
         ;;
     2)
         echo -e "${CYAN}[launching] Starting Ursina 3D Simulator...${NC}"
+        # Simulators run better from the mindlink context
         cd mindlink && ../$PYTHON_VENV drone_control/sim_ursina.py
         ;;
     3)
@@ -69,9 +70,9 @@ case $choice in
         ;;
     6)
         echo -e "${CYAN}[launching] Running Latency Benchmark...${NC}"
+        # Run from mindlink dir for config access
         cd mindlink && ../$PYTHON_VENV main.py --benchmark
         ;;
-
     q|Q)
         echo "Exiting."
         exit 0
