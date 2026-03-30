@@ -58,56 +58,66 @@ class HybridDecoder:
 
     def predict(self, features: np.ndarray) -> dict:
         """
-        Run hybrid inference.
-
-        Returns dict with:
-            intent (int), label (str), confidence (float),
-            path_used (str), latency_ms (float)
+        Run hybrid inference in parallel.
         """
         t0 = time.time()
         self._loop_count += 1
 
-        # Run quantum in thread with timeout
-        q_result = {"pred": -1, "conf": 0.0, "latency": 9999.0}
-        c_result = {"pred": 0, "conf": 0.5, "latency": 0.0}
+        results = {}
+        
+        def run_classical():
+            try:
+                pred, conf, lat = self.classical.predict(features)
+                results["classical"] = {"pred": pred, "conf": conf, "latency": lat}
+            except Exception as e:
+                print(f"[hybrid_decoder] Classical path error: {e}")
+                results["classical"] = {"pred": 0, "conf": 0.0, "latency": 0.0}
 
-        # Always run classical (fast baseline)
-        c_pred, c_conf, c_lat = self.classical.predict(features)
-        c_result = {"pred": c_pred, "conf": c_conf, "latency": c_lat}
+        def run_quantum():
+            try:
+                if self._use_quantum and self.quantum.available and self.quantum.model is not None:
+                    pred, conf, lat = self.quantum.predict(features)
+                    results["quantum"] = {"pred": pred, "conf": conf, "latency": lat}
+                else:
+                    results["quantum"] = {"pred": -1, "conf": 0.0, "latency": 9999.0}
+            except Exception as e:
+                print(f"[hybrid_decoder] Quantum path error: {e}")
+                results["quantum"] = {"pred": -1, "conf": 0.0, "latency": 9999.0}
 
-        # Try quantum if enabled
-        if self._use_quantum and self.quantum.available and self.quantum.model is not None:
-            q_thread_result = [None]
+        # Start both in parallel
+        t_c = threading.Thread(target=run_classical)
+        t_q = threading.Thread(target=run_quantum)
+        
+        t_c.start()
+        t_q.start()
 
-            def run_quantum():
-                q_thread_result[0] = self.quantum.predict(features)
+        # Wait for classical (should be very fast)
+        t_c.join()
+        
+        # Wait for quantum with timeout
+        t_q.join(timeout=self.q_timeout / 1000.0)
 
-            t = threading.Thread(target=run_quantum)
-            t.start()
-            t.join(timeout=self.q_timeout / 1000.0)
+        q_res = results.get("quantum", {"pred": -1, "conf": 0.0, "latency": 9999.0})
+        c_res = results.get("classical", {"pred": 0, "conf": 0.5, "latency": 0.0})
 
-            if t.is_alive() or q_thread_result[0] is None:
-                print(f"[hybrid_decoder] Quantum timeout (>{self.q_timeout} ms) — using classical")
-                self._quantum_fail_count += 1
-            else:
-                q_pred, q_conf, q_lat = q_thread_result[0]
-                q_result = {"pred": q_pred, "conf": q_conf, "latency": q_lat}
-
-        # Decision logic
-        use_quantum = (
-            q_result["pred"] != -1
-            and q_result["latency"] < self.q_timeout
-            and q_result["conf"] >= self.conf_threshold
-        )
-
-        if use_quantum:
-            final_pred = q_result["pred"]
-            final_conf = q_result["conf"]
-            path_used = "quantum"
-        else:
-            final_pred = c_result["pred"]
-            final_conf = c_result["conf"]
+        if t_q.is_alive():
+            print(f"[hybrid_decoder] Quantum timeout (>{self.q_timeout} ms) — using classical")
+            self._quantum_fail_count += 1
             path_used = "classical"
+            final_pred, final_conf = c_res["pred"], c_res["conf"]
+        else:
+            # Decision logic: Quantum preferred if confident
+            use_quantum = (
+                q_res["pred"] != -1
+                and q_res["conf"] >= self.conf_threshold
+            )
+            if use_quantum:
+                final_pred, final_conf = q_res["pred"], q_res["conf"]
+                path_used = "quantum"
+                self._quantum_fail_count = 0 # reset on success
+            else:
+                final_pred, final_conf = c_res["pred"], c_res["conf"]
+                path_used = "classical"
 
         # Disable quantum after 3 consecutive failures
         if self._quantum_fail_count >= 3:
@@ -124,8 +134,8 @@ class HybridDecoder:
             "confidence": final_conf,
             "path_used": path_used,
             "latency_ms": total_latency,
-            "quantum_latency_ms": q_result["latency"],
-            "classical_latency_ms": c_result["latency"]
+            "quantum_latency_ms": q_res["latency"],
+            "classical_latency_ms": c_res["latency"]
         }
 
         print(f"[hybrid_decoder] → {label} | conf={final_conf:.2f} | path={path_used} | {total_latency:.1f} ms")
