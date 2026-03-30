@@ -15,6 +15,8 @@ import time
 import numpy as np
 from collections import deque
 from ursina import *
+from ursina.prefabs.health_bar import HealthBar
+from ursina.prefabs.window_panel import WindowPanel
 from ursina.prefabs.first_person_controller import FirstPersonController
 
 # Add project root to path for imports
@@ -50,7 +52,7 @@ class Drone(Entity):
             self.arms.append(arm)
             
             # Rotors
-            rotor = Entity(parent=arm, model='cylinder', color=color.black, 
+            rotor = Entity(parent=arm, model='sphere', color=color.black, 
                            position=(0.5 if pos[0]>0 else -0.5, 0.1, 0), scale=(0.8, 0.1, 0.8))
             
             # Blades
