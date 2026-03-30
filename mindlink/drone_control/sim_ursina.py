@@ -18,7 +18,7 @@ from ursina import *
 from ursina.prefabs.first_person_controller import FirstPersonController
 
 # Add project root to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # ── Import Shared BCI Logic ──────────────────────────────────────────
 # We reuse the robust logic from sim3d.py
