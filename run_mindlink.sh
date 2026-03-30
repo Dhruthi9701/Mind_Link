@@ -37,14 +37,14 @@ fi
 
 # 3. Interactive Menu
 echo "What would you like to start?"
-echo -e "  ${GREEN}[1]${NC} Main Orchestrator (Full 5-Unit Pipeline)"
-echo -e "  ${GREEN}[2]${NC} 3D Interactive Simulator (Visual Improvements & Clickable HUD)"
-echo -e "  ${GREEN}[3]${NC} Pre-flight Hardware Checklist"
-echo -e "  ${GREEN}[4]${NC} Train Models (PhysioNet Dataset)"
-echo -e "  ${GREEN}[5]${NC} Run Latency Benchmark"
+echo -e "  ${GREEN}[2]${NC} 3D Ursina Simulator (High Fidelity, Infinite Grid)"
+echo -e "  ${GREEN}[3]${NC} 3D Pygame Simulator (Legacy, Lightweight)"
+echo -e "  ${GREEN}[4]${NC} Pre-flight Hardware Checklist"
+echo -e "  ${GREEN}[5]${NC} Train Models (PhysioNet Dataset)"
+echo -e "  ${GREEN}[6]${NC} Run Latency Benchmark"
 echo -e "  ${YELLOW}[Q]${NC} Quit"
 echo ""
-read -p "Select an option [1-5]: " choice
+read -p "Select an option [1-6]: " choice
 
 case $choice in
     1)
@@ -52,23 +52,26 @@ case $choice in
         $PYTHON_VENV $MAIN_SCRIPT
         ;;
     2)
-        echo -e "${CYAN}[launching] Starting 3D Simulator...${NC}"
-        # Sim3D needs to be run from its own directory context for some assets
-        cd mindlink && ../$PYTHON_VENV drone_control/sim3d.py
+        echo -e "${CYAN}[launching] Starting Ursina 3D Simulator...${NC}"
+        cd mindlink && ../$PYTHON_VENV drone_control/sim_ursina.py
         ;;
     3)
+        echo -e "${CYAN}[launching] Starting Legacy 3D Simulator...${NC}"
+        cd mindlink && ../$PYTHON_VENV drone_control/sim3d.py
+        ;;
+    4)
         echo -e "${CYAN}[launching] Running Pre-flight Checklist...${NC}"
         $PYTHON_VENV $MAIN_SCRIPT --checklist
         ;;
-    4)
+    5)
         echo -e "${CYAN}[launching] Starting Training Pass...${NC}"
         $PYTHON_VENV $MAIN_SCRIPT --train
         ;;
-    5)
+    6)
         echo -e "${CYAN}[launching] Running Latency Benchmark...${NC}"
-        # Run from mindlink dir for config access
         cd mindlink && ../$PYTHON_VENV main.py --benchmark
         ;;
+
     q|Q)
         echo "Exiting."
         exit 0
