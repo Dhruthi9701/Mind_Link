@@ -1,7 +1,7 @@
 """
 Mind Link — 3D Drone Simulator (pygame + software 3D renderer)
 ================================================================
-Pure pygame — no Ursina, no OpenGL. Custom 3D projection gives
+Pure pygame renderer. Custom 3D projection gives
 full control: world stays fixed, only drone moves.
 
 Install: pip install pygame scipy numpy

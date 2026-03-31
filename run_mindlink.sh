@@ -37,14 +37,13 @@ fi
 # 3. Interactive Menu
 echo "What would you like to start?"
 echo -e "  ${GREEN}[1]${NC} Main Orchestrator (Full 5-Unit Pipeline)"
-echo -e "  ${GREEN}[2]${NC} 3D Ursina Simulator (High Fidelity, Infinite Grid)"
-echo -e "  ${GREEN}[3]${NC} 3D Pygame Simulator (Legacy, Lightweight)"
-echo -e "  ${GREEN}[4]${NC} Pre-flight Hardware Checklist"
-echo -e "  ${GREEN}[5]${NC} Train Models (PhysioNet Dataset)"
-echo -e "  ${GREEN}[6]${NC} Run Latency Benchmark"
+echo -e "  ${GREEN}[2]${NC} 3D Pygame Simulator (Tron Style, Free Camera)"
+echo -e "  ${GREEN}[3]${NC} Pre-flight Hardware Checklist"
+echo -e "  ${GREEN}[4]${NC} Train Models (PhysioNet Dataset)"
+echo -e "  ${GREEN}[5]${NC} Run Latency Benchmark"
 echo -e "  ${YELLOW}[Q]${NC} Quit"
 echo ""
-read -p "Select an option [1-6]: " choice
+read -p "Select an option [1-5]: " choice
 
 case $choice in
     1)
@@ -52,23 +51,18 @@ case $choice in
         $PYTHON_VENV $MAIN_SCRIPT
         ;;
     2)
-        echo -e "${CYAN}[launching] Starting Ursina 3D Simulator...${NC}"
-        # Simulators run better from the mindlink context
-        cd mindlink && ../$PYTHON_VENV drone_control/sim_ursina.py
-        ;;
-    3)
-        echo -e "${CYAN}[launching] Starting Legacy 3D Simulator...${NC}"
+        echo -e "${CYAN}[launching] Starting 3D Simulator...${NC}"
         cd mindlink && ../$PYTHON_VENV drone_control/sim3d.py
         ;;
-    4)
+    3)
         echo -e "${CYAN}[launching] Running Pre-flight Checklist...${NC}"
         $PYTHON_VENV $MAIN_SCRIPT --checklist
         ;;
-    5)
+    4)
         echo -e "${CYAN}[launching] Starting Training Pass...${NC}"
         $PYTHON_VENV $MAIN_SCRIPT --train
         ;;
-    6)
+    5)
         echo -e "${CYAN}[launching] Running Latency Benchmark...${NC}"
         # Run from mindlink dir for config access
         cd mindlink && ../$PYTHON_VENV main.py --benchmark
