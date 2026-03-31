@@ -45,8 +45,8 @@ RED         = (255,  50,  50)
 WHITE       = (255, 255, 255)
 GREY        = ( 80,  90, 110)
 YELLOW      = (255, 220,   0)
-GRID_MAJOR  = (  0, 210, 255, 255)   # fully opaque bright cyan
-GRID_MINOR  = (  0,  80, 110, 140)   # semi-transparent minor lines
+GRID_MAJOR  = (  0, 150, 200, 100)   # dimmer cyan, semi-transparent
+GRID_MINOR  = (  0,  60,  90,  50)   # very faint minor lines
 DRONE_BODY  = ( 30, 120, 220)
 DRONE_ARM   = ( 20,  60, 100)
 ROTOR_A     = (255,  60,  60)
@@ -159,14 +159,16 @@ class Camera3D:
 def make_grid(size=100, step=5):
     """Return list of (p1, p2, colour, width) line segments for the grid."""
     lines = []
+    chunk = 20  # Break long lines into chunks to prevent whole-line clipping
     for i in range(-size, size+1, step):
         # major every 25, minor every 5
         is_major = (i % 25 == 0)
         col   = GRID_MAJOR[:3] if is_major else GRID_MINOR[:3]
         alpha = GRID_MAJOR[3]  if is_major else GRID_MINOR[3]
-        w     = 3 if is_major else 1   # major lines are 3px thick
-        lines.append(((i, 0, -size), (i, 0,  size), col, alpha, w))
-        lines.append(((-size, 0, i), ( size, 0, i), col, alpha, w))
+        w     = 2 if is_major else 1   # slightly thinner major lines
+        for j in range(-size, size, chunk):
+            lines.append(((i, 0, j), (i, 0, j+chunk), col, alpha, w))
+            lines.append(((j, 0, i), (j+chunk, 0, i), col, alpha, w))
     return lines
 
 
