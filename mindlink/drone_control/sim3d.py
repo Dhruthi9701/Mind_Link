@@ -1193,12 +1193,6 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
                 elif use_bci:
                     for intent_id, rect in click_regions.items():
                         if rect.collidepoint(mx, my):
-                            bci_intent = intent_id
-                            bci_label = sig_map.INTENT_NAMES[intent_id]
-                            bci_conf = 1.0 # Manual override
-                            last_bci = time.time() # Lock it in for a moment
-                            warn_text = f"MANUAL: {bci_label}"
-                            warn_timer = 1.0
                             clicked_ui = True
                             break
                             
@@ -1226,6 +1220,21 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
         if keys[pygame.K_d]:     yaw_in   =  1.
         kb_active = any([pitch, roll, yaw_in, throttle])
 
+        # ── Continuous Mouse Input on BCI Panels ──────────────────────
+        manual_bci = False
+        if use_bci and pygame.mouse.get_pressed()[0] and not sig_map.menu_open:
+            mx, my = pygame.mouse.get_pos()
+            for intent_id, rect in click_regions.items():
+                if rect.collidepoint(mx, my):
+                    bci_intent = intent_id
+                    bci_label = sig_map.INTENT_NAMES[intent_id]
+                    bci_conf = 1.0 # Manual override
+                    last_bci = time.time() + 0.1 # Lock out decoder while holding
+                    manual_bci = True
+                    warn_text = f"MANUAL: {bci_label}"
+                    warn_timer = 0.5
+                    break
+
         # ── BCI decode ────────────────────────────────────────────────
         if use_bci and decoder and (time.time()-last_bci) > BCI_INT:
             n = int(eeg_src.fs*0.5)
@@ -1236,7 +1245,7 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
         # ── Merge inputs ──────────────────────────────────────────────
         if kb_active:
             source = "KB"
-        elif use_bci and state.flying and bci_conf > 0.45:
+        elif use_bci and state.flying and (bci_conf > 0.45 or manual_bci):
             p,r,y,t2 = sig_map.get_command(bci_intent)
             pitch,roll,yaw_in,throttle = p,r,y,t2
             source = "BCI"
