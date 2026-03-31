@@ -45,8 +45,8 @@ RED         = (255,  50,  50)
 WHITE       = (255, 255, 255)
 GREY        = ( 80,  90, 110)
 YELLOW      = (255, 220,   0)
-GRID_MAJOR  = (  0, 180, 210,  90)   # RGBA — major grid lines
-GRID_MINOR  = (  0,  80, 100,  45)   # RGBA — minor grid lines
+GRID_MAJOR  = (  0, 210, 255, 255)   # fully opaque bright cyan
+GRID_MINOR  = (  0,  80, 110, 140)   # semi-transparent minor lines
 DRONE_BODY  = ( 30, 120, 220)
 DRONE_ARM   = ( 20,  60, 100)
 ROTOR_A     = (255,  60,  60)
@@ -74,10 +74,12 @@ class Camera3D:
     PRESET_NAMES = ["FOLLOW", "HIGH", "TOP-DOWN", "SIDE"]
 
     def __init__(self):
-        self._preset = 0
-        self.dist    = 18.0
-        self.fov     = 500          # perspective scale
-        self._az, self._el = self.PRESETS[0]
+        self._preset = 1            # start on HIGH so grid is visible
+        self.dist    = 22.0         # camera distance (zoom-able)
+        self.dist_min = 8.0
+        self.dist_max = 80.0
+        self.fov     = 500
+        self._az, self._el = self.PRESETS[self._preset]
 
     @property
     def name(self): return self.PRESET_NAMES[self._preset]
@@ -85,6 +87,10 @@ class Camera3D:
     def cycle(self):
         self._preset = (self._preset + 1) % len(self.PRESETS)
         self._az, self._el = self.PRESETS[self._preset]
+
+    def zoom(self, delta):
+        """delta > 0 = zoom in, delta < 0 = zoom out."""
+        self.dist = max(self.dist_min, min(self.dist_max, self.dist - delta * 3.0))
 
     def project(self, world_pts, drone_pos):
         """
@@ -147,23 +153,23 @@ def make_grid(size=100, step=10):
         is_major = (i % 50 == 0)
         col   = GRID_MAJOR[:3] if is_major else GRID_MINOR[:3]
         alpha = GRID_MAJOR[3]  if is_major else GRID_MINOR[3]
-        w     = 2 if is_major else 1
+        w     = 3 if is_major else 1   # major lines are 3px thick
         lines.append(((i, 0, -size), (i, 0,  size), col, alpha, w))
         lines.append(((-size, 0, i), ( size, 0, i), col, alpha, w))
     return lines
 
 
 def make_buildings():
-    """Return list of box wireframes (list of edges) for distant buildings."""
+    """Return list of box wireframes for distant buildings (pushed further out)."""
     defs = [
-        (50, 0, 30,  5, 18, 5),
-        (55, 0, 18,  3, 10, 3),
-        (-45, 0, 40, 6, 22, 6),
-        (-50, 0, 22, 4, 14, 4),
-        (60, 0, -25, 7, 28, 7),
-        (-55, 0, -30, 5, 16, 5),
-        (40, 0, -50, 6, 20, 6),
-        (-30, 0, -45, 4, 12, 4),
+        ( 90, 0,  55,  5, 18, 5),
+        (100, 0,  32,  3, 10, 3),
+        (-82, 0,  72,  6, 22, 6),
+        (-90, 0,  40,  4, 14, 4),
+        (110, 0, -45,  7, 28, 7),
+        (-99, 0, -54,  5, 16, 5),
+        ( 72, 0, -90,  6, 20, 6),
+        (-54, 0, -81,  4, 12, 4),
     ]
     buildings = []
     for (bx, by, bz, sw, sh, sd) in defs:
@@ -1111,6 +1117,10 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
                 elif event.key == pygame.K_c and not sig_map.menu_open:
                     cam.cycle()
                     warn_text=f"CAM: {cam.name}"; warn_timer=1.
+                elif event.key in (pygame.K_PLUS, pygame.K_EQUALS, pygame.K_KP_PLUS) and not sig_map.menu_open:
+                    cam.zoom(1); warn_text=f"ZOOM {cam.dist:.0f}"; warn_timer=0.5
+                elif event.key in (pygame.K_MINUS, pygame.K_KP_MINUS) and not sig_map.menu_open:
+                    cam.zoom(-1); warn_text=f"ZOOM {cam.dist:.0f}"; warn_timer=0.5
                 elif event.key == pygame.K_m:
                     sig_map.menu_open = not sig_map.menu_open
                     sig_map.selected_intent = None
@@ -1142,6 +1152,9 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
                     }
                     if event.key in intent_keys:
                         sig_map.selected_intent = intent_keys[event.key]
+            # Mouse wheel zoom
+            if event.type == pygame.MOUSEWHEEL:
+                cam.zoom(event.y)   # y>0 = scroll up = zoom in
             # Mouse click handling
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = event.pos
