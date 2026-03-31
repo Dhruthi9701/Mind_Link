@@ -615,6 +615,9 @@ def render_scene(surf, cam, state, trail, rotor_angle, font_sm):
     grid_surf = pygame.Surface((W, H), pygame.SRCALPHA)
     for (p1, p2, col, alpha, lw) in grid_segs:
         c = (col[0], col[1], col[2], alpha)
+        # Glow
+        pygame.draw.line(grid_surf, (col[0], col[1]//2, col[2]//2, alpha//2), (p1[0],p1[1]), (p2[0],p2[1]), lw + 4)
+        # Core
         pygame.draw.line(grid_surf, c, (p1[0],p1[1]), (p2[0],p2[1]), lw)
     surf.blit(grid_surf, (0,0))
 
@@ -631,22 +634,30 @@ def render_scene(surf, cam, state, trail, rotor_angle, font_sm):
         pygame.draw.polygon(surf, (15,15,30), pts2d)
         pygame.draw.polygon(surf, ORANGE, pts2d, 2)
 
-    # ── Buildings ─────────────────────────────────────────────────────
+    # ── Buildings (Tron style) ────────────────────────────────────────
     for (corners, edges, win_rows, bx, bz, sw, sd, sh) in BUILDINGS:
         proj = cam.project(corners, drone_pos)
         # draw edges
         for (i,j) in edges:
             if proj[i] and proj[j]:
                 depth = (proj[i][2]+proj[j][2])/2
-                fade = max(40, min(160, int(200 - depth*1.5)))
-                col = (0, fade//2, fade)
-                pygame.draw.line(surf, col, (proj[i][0],proj[i][1]),
-                                 (proj[j][0],proj[j][1]), 1)
+                scale = max(0.0, min(1.0, (250 - depth) / 250))
+                
+                core_col = (0, int(220*scale), int(255*scale))
+                glow_col = (0, int(80*scale), int(150*scale))
+                
+                p1, p2 = (proj[i][0],proj[i][1]), (proj[j][0],proj[j][1])
+                
+                if scale > 0.1:
+                    pygame.draw.line(surf, glow_col, p1, p2, 5) # thick glow
+                    pygame.draw.line(surf, core_col, p1, p2, 2) # bright core
+
         # window glow dots
         for wy in win_rows:
             wp = cam.project([(bx, wy, bz)], drone_pos)
             if wp[0] and wp[0][2] < 120:
-                pygame.draw.circle(surf, (180,220,255), (wp[0][0],wp[0][1]), 2)
+                scale = max(0.0, min(1.0, (120 - wp[0][2]) / 120))
+                pygame.draw.circle(surf, (0, int(255*scale), int(255*scale)), (wp[0][0],wp[0][1]), 3)
 
     # ── Trail ─────────────────────────────────────────────────────────
     if len(trail) > 1:
@@ -1105,9 +1116,6 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
     while running:
         dt = clock.tick(60) / 1000.
         fps = clock.get_fps()
-        
-        # Reset regions each frame
-        click_regions = {}
 
         # ── Events ───────────────────────────────────────────────────
         for event in pygame.event.get():
@@ -1272,6 +1280,7 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
         screen.blit(scan_surf, (0,0))
 
         render_scene(screen, cam, state, trail, rotor_angle, fonts[1])
+        click_regions.clear()
         render_hud(screen, fonts, state, source, bci_label, bci_conf,
                    bci_features, use_bci, cam.name, fps, click_regions)
 
