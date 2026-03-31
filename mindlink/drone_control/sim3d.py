@@ -62,7 +62,7 @@ W, H = 1280, 720
 class Camera3D:
     """
     Orbit camera — always looks at the drone.
-    Yaw/pitch controlled by preset angles (C key cycles).
+    Yaw/pitch controlled by preset angles (C key cycles) or mouse drag.
     World never rotates — only the viewpoint changes.
     """
     PRESETS = [
@@ -82,15 +82,26 @@ class Camera3D:
         self._az, self._el = self.PRESETS[self._preset]
 
     @property
-    def name(self): return self.PRESET_NAMES[self._preset]
+    def name(self):
+        if self._preset == -1: return "FREE"
+        return self.PRESET_NAMES[self._preset]
 
     def cycle(self):
-        self._preset = (self._preset + 1) % len(self.PRESETS)
+        if self._preset == -1:
+            self._preset = 0
+        else:
+            self._preset = (self._preset + 1) % len(self.PRESETS)
         self._az, self._el = self.PRESETS[self._preset]
 
     def zoom(self, delta):
         """delta > 0 = zoom in, delta < 0 = zoom out."""
         self.dist = max(self.dist_min, min(self.dist_max, self.dist - delta * 3.0))
+
+    def rotate(self, dx, dy):
+        """Rotate camera based on mouse movement."""
+        self._preset = -1  # free camera
+        self._az = (self._az - dx * 0.5) % 360
+        self._el = max(-179.9, min(89.9, self._el - dy * 0.5))
 
     def project(self, world_pts, drone_pos):
         """
@@ -145,12 +156,12 @@ class Camera3D:
 # WORLD GEOMETRY
 # ══════════════════════════════════════════════════════════════════════
 
-def make_grid(size=100, step=10):
+def make_grid(size=100, step=5):
     """Return list of (p1, p2, colour, width) line segments for the grid."""
     lines = []
     for i in range(-size, size+1, step):
-        # major every 50, minor every 10
-        is_major = (i % 50 == 0)
+        # major every 25, minor every 5
+        is_major = (i % 25 == 0)
         col   = GRID_MAJOR[:3] if is_major else GRID_MINOR[:3]
         alpha = GRID_MAJOR[3]  if is_major else GRID_MINOR[3]
         w     = 3 if is_major else 1   # major lines are 3px thick
@@ -208,12 +219,12 @@ PAD = [
 # DRONE GEOMETRY  (local coords, centred at origin)
 # ══════════════════════════════════════════════════════════════════════
 
-ARM_LEN  = 1.0
-ROTOR_R  = 0.45
-BODY_W   = 0.35   # half-width of body plate
-BODY_L   = 0.4    # half-length of body plate
-LEG_DROP = 0.3    # how far landing gear drops below body
-LEG_SPREAD = 0.5  # lateral spread of landing gear
+ARM_LEN  = 2.0
+ROTOR_R  = 0.9
+BODY_W   = 0.7    # half-width of body plate
+BODY_L   = 0.8    # half-length of body plate
+LEG_DROP = 0.6    # how far landing gear drops below body
+LEG_SPREAD = 1.0  # lateral spread of landing gear
 
 def drone_points(yaw_deg, pitch_deg, roll_deg):
     """
@@ -1084,6 +1095,8 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
     # Clickable HUD regions
     click_regions = {}
 
+    mouse_dragging = False
+
     print("\n[sim3d] Ready — T=Takeoff, ESC=Quit")
 
     running = True
@@ -1158,6 +1171,7 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
             # Mouse click handling
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = event.pos
+                clicked_ui = False
                 
                 # Check mapping menu clicks
                 if sig_map.menu_open:
@@ -1168,7 +1182,11 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
                         row_y = MY2 + 110 + i * 44
                         if MX2+10 <= mx <= MX2+MW2-10 and row_y <= my <= row_y+38:
                             sig_map.selected_intent = i
+                            clicked_ui = True
                             break
+                    if MX2 <= mx <= MX2+MW2 and MY2 <= my <= MY2+MH2:
+                        clicked_ui = True
+
                 # Check BCI bar clicks in HUD
                 elif use_bci:
                     for intent_id, rect in click_regions.items():
@@ -1179,7 +1197,19 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
                             last_bci = time.time() # Lock it in for a moment
                             warn_text = f"MANUAL: {bci_label}"
                             warn_timer = 1.0
+                            clicked_ui = True
                             break
+                            
+                if not clicked_ui and event.button in (1, 3):
+                    mouse_dragging = True
+
+            if event.type == pygame.MOUSEBUTTONUP:
+                if event.button in (1, 3):
+                    mouse_dragging = False
+                    
+            if event.type == pygame.MOUSEMOTION:
+                if mouse_dragging:
+                    cam.rotate(event.rel[0], event.rel[1])
 
         # ── Keyboard flight input ─────────────────────────────────────
         keys = pygame.key.get_pressed()
