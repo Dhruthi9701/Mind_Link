@@ -134,13 +134,23 @@ class ClassicalDecoder:
     # Persistence
     # ------------------------------------------------------------------
 
-    def save(self, path: str = "mindlink/models/classical_model.pkl"):
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
+    def save(self, path: str = None):
+        if path is None:
+            path = Path(__file__).parent.parent / "models" / "classical_model.pkl"
+        else:
+            path = Path(path)
+            
+        path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "wb") as f:
             pickle.dump({"model": self.model, "n_features": self._n_features}, f)
         print(f"[classical_path] Model saved to {path}")
 
-    def load(self, path: str = "mindlink/models/classical_model.pkl"):
+    def load(self, path: str = None):
+        if path is None:
+            path = Path(__file__).parent.parent / "models" / "classical_model.pkl"
+        else:
+            path = Path(path)
+            
         with open(path, "rb") as f:
             data = pickle.load(f)
         if isinstance(data, dict):

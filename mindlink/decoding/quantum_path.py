@@ -13,7 +13,6 @@ try:
     from qiskit.circuit.library import ZZFeatureMap
     from qiskit_machine_learning.algorithms import QSVC
     from qiskit_aer import AerSimulator
-    from qiskit.primitives import Sampler
     from qiskit import transpile
     QISKIT_AVAILABLE = True
 except ImportError:
@@ -140,17 +139,27 @@ class QuantumDecoder:
         pad = np.zeros((*X.shape[:-1], n - X.shape[-1]))
         return np.concatenate([X, pad], axis=-1)
 
-    def save(self, path: str = "mindlink/models/quantum_model.pkl"):
+    def save(self, path: str = None):
         """Serialize trained model."""
         import pickle
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        if path is None:
+            path = Path(__file__).parent.parent / "models" / "quantum_model.pkl"
+        else:
+            path = Path(path)
+            
+        path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "wb") as f:
             pickle.dump(self.model, f)
         print(f"[quantum_path] Model saved to {path}")
 
-    def load(self, path: str = "mindlink/models/quantum_model.pkl"):
+    def load(self, path: str = None):
         """Load serialized model."""
         import pickle
+        if path is None:
+            path = Path(__file__).parent.parent / "models" / "quantum_model.pkl"
+        else:
+            path = Path(path)
+            
         with open(path, "rb") as f:
             self.model = pickle.load(f)
         print(f"[quantum_path] Model loaded from {path}")

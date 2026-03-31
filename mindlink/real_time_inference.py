@@ -18,7 +18,8 @@ from utils.latency_benchmark import LatencyBenchmark
 
 
 def load_config():
-    with open("config.yaml") as f:
+    cfg_path = Path(__file__).parent / "config.yaml"
+    with open(cfg_path) as f:
         return yaml.safe_load(f)
 
 
@@ -30,6 +31,7 @@ def run():
     overlap = cfg["processing"]["window_overlap"]
     n_samples = int(fs * window_ms / 1000)
     step_samples = int(n_samples * (1 - overlap))
+    step_time_s = step_samples / fs
     adaptive_interval = cfg["safety"]["adaptive_update_interval_seconds"]
 
     print(f"\n{'='*60}")
@@ -56,12 +58,14 @@ def run():
     # Load pre-trained models
     decoder.load_models()
 
-    # Auto-train classical model if not found
+    # Auto-train models if not found
     if not decoder.classical._fitted:
         print("[inference] No saved models found — auto-training on synthetic data...")
         from utils.feature_engineering import prepare_training_data
         X, y = prepare_training_data(subject=cfg["decoding"]["physionet_subject"])
-        decoder.classical.train(X, y)
+        
+        # Train both paths
+        decoder.train(X, y)
         decoder.save_models()
 
     # Start streaming
@@ -139,8 +143,11 @@ def run():
                 adaptive_X, adaptive_y = [], []
                 last_adaptive_time = time.time()
 
-            # Step forward by overlap
-            time.sleep(step_samples / fs)
+            # --- Precise timing ---
+            # Sleep only the remaining time of the step interval
+            elapsed_s = time.perf_counter() - t_loop_start
+            sleep_time = max(0, step_time_s - elapsed_s)
+            time.sleep(sleep_time)
 
     except KeyboardInterrupt:
         print("\n[inference] Stopped by user")

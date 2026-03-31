@@ -8,12 +8,14 @@ Usage:
     python main.py --benchmark      # latency benchmark only
 """
 
+from pathlib import Path
 import sys
 import yaml
 
 
 def load_config():
-    with open("config.yaml") as f:
+    cfg_path = Path(__file__).parent / "config.yaml"
+    with open(cfg_path) as f:
         return yaml.safe_load(f)
 
 

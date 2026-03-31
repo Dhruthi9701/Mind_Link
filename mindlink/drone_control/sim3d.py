@@ -1,7 +1,7 @@
 """
 Mind Link — 3D Drone Simulator (pygame + software 3D renderer)
 ================================================================
-Pure pygame — no Ursina, no OpenGL. Custom 3D projection gives
+Pure pygame renderer. Custom 3D projection gives
 full control: world stays fixed, only drone moves.
 
 Install: pip install pygame scipy numpy
@@ -45,8 +45,8 @@ RED         = (255,  50,  50)
 WHITE       = (255, 255, 255)
 GREY        = ( 80,  90, 110)
 YELLOW      = (255, 220,   0)
-GRID_MAJOR  = (  0, 180, 210,  90)   # RGBA — major grid lines
-GRID_MINOR  = (  0,  80, 100,  45)   # RGBA — minor grid lines
+GRID_MAJOR  = (  0, 150, 200, 100)   # dimmer cyan, semi-transparent
+GRID_MINOR  = (  0,  60,  90,  50)   # very faint minor lines
 DRONE_BODY  = ( 30, 120, 220)
 DRONE_ARM   = ( 20,  60, 100)
 ROTOR_A     = (255,  60,  60)
@@ -62,7 +62,7 @@ W, H = 1280, 720
 class Camera3D:
     """
     Orbit camera — always looks at the drone.
-    Yaw/pitch controlled by preset angles (C key cycles).
+    Yaw/pitch controlled by preset angles (C key cycles) or mouse drag.
     World never rotates — only the viewpoint changes.
     """
     PRESETS = [
@@ -74,17 +74,34 @@ class Camera3D:
     PRESET_NAMES = ["FOLLOW", "HIGH", "TOP-DOWN", "SIDE"]
 
     def __init__(self):
-        self._preset = 0
-        self.dist    = 18.0
-        self.fov     = 500          # perspective scale
-        self._az, self._el = self.PRESETS[0]
+        self._preset = 1            # start on HIGH so grid is visible
+        self.dist    = 22.0         # camera distance (zoom-able)
+        self.dist_min = 8.0
+        self.dist_max = 80.0
+        self.fov     = 500
+        self._az, self._el = self.PRESETS[self._preset]
 
     @property
-    def name(self): return self.PRESET_NAMES[self._preset]
+    def name(self):
+        if self._preset == -1: return "FREE"
+        return self.PRESET_NAMES[self._preset]
 
     def cycle(self):
-        self._preset = (self._preset + 1) % len(self.PRESETS)
+        if self._preset == -1:
+            self._preset = 0
+        else:
+            self._preset = (self._preset + 1) % len(self.PRESETS)
         self._az, self._el = self.PRESETS[self._preset]
+
+    def zoom(self, delta):
+        """delta > 0 = zoom in, delta < 0 = zoom out."""
+        self.dist = max(self.dist_min, min(self.dist_max, self.dist - delta * 3.0))
+
+    def rotate(self, dx, dy):
+        """Rotate camera based on mouse movement."""
+        self._preset = -1  # free camera
+        self._az = (self._az - dx * 0.5) % 360
+        self._el = max(-179.9, min(89.9, self._el - dy * 0.5))
 
     def project(self, world_pts, drone_pos):
         """
@@ -139,31 +156,33 @@ class Camera3D:
 # WORLD GEOMETRY
 # ══════════════════════════════════════════════════════════════════════
 
-def make_grid(size=100, step=10):
+def make_grid(size=100, step=5):
     """Return list of (p1, p2, colour, width) line segments for the grid."""
     lines = []
+    chunk = 20  # Break long lines into chunks to prevent whole-line clipping
     for i in range(-size, size+1, step):
-        # major every 50, minor every 10
-        is_major = (i % 50 == 0)
+        # major every 25, minor every 5
+        is_major = (i % 25 == 0)
         col   = GRID_MAJOR[:3] if is_major else GRID_MINOR[:3]
         alpha = GRID_MAJOR[3]  if is_major else GRID_MINOR[3]
-        w     = 2 if is_major else 1
-        lines.append(((i, 0, -size), (i, 0,  size), col, alpha, w))
-        lines.append(((-size, 0, i), ( size, 0, i), col, alpha, w))
+        w     = 2 if is_major else 1   # slightly thinner major lines
+        for j in range(-size, size, chunk):
+            lines.append(((i, 0, j), (i, 0, j+chunk), col, alpha, w))
+            lines.append(((j, 0, i), (j+chunk, 0, i), col, alpha, w))
     return lines
 
 
 def make_buildings():
-    """Return list of box wireframes (list of edges) for distant buildings."""
+    """Return list of box wireframes for distant buildings (pushed further out)."""
     defs = [
-        (50, 0, 30,  5, 18, 5),
-        (55, 0, 18,  3, 10, 3),
-        (-45, 0, 40, 6, 22, 6),
-        (-50, 0, 22, 4, 14, 4),
-        (60, 0, -25, 7, 28, 7),
-        (-55, 0, -30, 5, 16, 5),
-        (40, 0, -50, 6, 20, 6),
-        (-30, 0, -45, 4, 12, 4),
+        ( 90, 0,  55,  5, 18, 5),
+        (100, 0,  32,  3, 10, 3),
+        (-82, 0,  72,  6, 22, 6),
+        (-90, 0,  40,  4, 14, 4),
+        (110, 0, -45,  7, 28, 7),
+        (-99, 0, -54,  5, 16, 5),
+        ( 72, 0, -90,  6, 20, 6),
+        (-54, 0, -81,  4, 12, 4),
     ]
     buildings = []
     for (bx, by, bz, sw, sh, sd) in defs:
@@ -202,18 +221,18 @@ PAD = [
 # DRONE GEOMETRY  (local coords, centred at origin)
 # ══════════════════════════════════════════════════════════════════════
 
-ARM_LEN  = 1.0
-ROTOR_R  = 0.45
-BODY_W   = 0.35   # half-width of body plate
-BODY_L   = 0.4    # half-length of body plate
-LEG_DROP = 0.3    # how far landing gear drops below body
-LEG_SPREAD = 0.5  # lateral spread of landing gear
+ARM_LEN  = 2.0
+ROTOR_R  = 0.9
+BODY_W   = 0.7    # half-width of body plate
+BODY_L   = 0.8    # half-length of body plate
+LEG_DROP = 0.6    # how far landing gear drops below body
+LEG_SPREAD = 1.0  # lateral spread of landing gear
 
 def drone_points(yaw_deg, pitch_deg, roll_deg):
     """
     Return all 3-D points for the drone in local space,
     rotated by yaw/pitch/roll.
-    Returns: (centre, arms, body_corners, leg_bottoms, front_cam)
+    Returns: (centre, arms, body_corners, canopy, leg_tops, leg_bottoms, front_cam)
     """
     ya = math.radians(yaw_deg)
     pa = math.radians(pitch_deg)
@@ -244,12 +263,17 @@ def drone_points(yaw_deg, pitch_deg, roll_deg):
         rot((-ARM_LEN,  0, -ARM_LEN)),   # back-left
     ]
 
-    # Body plate corners (flat rectangle)
+    # Body plate corners (octagonal)
+    bw, bl = BODY_W, BODY_L
     body_corners = [
-        rot(( BODY_W,  0,  BODY_L)),
-        rot((-BODY_W,  0,  BODY_L)),
-        rot((-BODY_W,  0, -BODY_L)),
-        rot(( BODY_W,  0, -BODY_L)),
+        rot(( bw,  0.05,  bl)), rot((-bw,  0.05,  bl)),
+        rot((-bw*1.4, 0.05, 0)), rot((-bw,  0.05, -bl)),
+        rot(( bw,  0.05, -bl)), rot(( bw*1.4, 0.05, 0)),
+    ]
+    # Top canopy
+    canopy = [
+        rot(( bw*0.7, 0.22, bl*0.5)), rot((-bw*0.7, 0.22, bl*0.5)),
+        rot((-bw*0.7, 0.22, -bl*0.5)), rot(( bw*0.7, 0.22, -bl*0.5)),
     ]
 
     # Landing gear: 2 skid bars, each with front+back contact points
@@ -269,7 +293,7 @@ def drone_points(yaw_deg, pitch_deg, roll_deg):
     # Front camera pod
     front_cam = rot((0, -0.1, BODY_L + 0.15))
 
-    return centre, arms, body_corners, leg_tops, leg_bottoms, front_cam
+    return centre, arms, body_corners, canopy, leg_tops, leg_bottoms, front_cam
 
 
 def rotor_ring_pts(cx, cy, cz, r, n=12):
@@ -563,7 +587,7 @@ def draw_compass(surf, cx, cy, r, yaw_deg, font_sm):
 # 3-D SCENE RENDERER
 # ══════════════════════════════════════════════════════════════════════
 
-def render_scene(surf, cam, state, trail, rotor_angle):
+def render_scene(surf, cam, state, trail, rotor_angle, font_sm):
     """Draw world grid, buildings, landing pad, drone, trail."""
     drone_pos = (state.x, state.y, state.z)
 
@@ -575,6 +599,15 @@ def render_scene(surf, cam, state, trail, rotor_angle):
         if pts[0] and pts[1]:
             grid_segs.append((pts[0], pts[1], col, alpha, lw))
 
+    # Grid coordinate labels
+    label_pts = []
+    labels = []
+    for x in range(-100, 101, 50):
+        for z in range(-100, 101, 50):
+            label_pts.append((float(x), 0.0, float(z)))
+            labels.append(f"{x},{z}")
+    label_proj = cam.project(label_pts, drone_pos)
+
     # Sort back-to-front by average depth
     grid_segs.sort(key=lambda s: -(s[0][2]+s[1][2])/2)
 
@@ -582,8 +615,17 @@ def render_scene(surf, cam, state, trail, rotor_angle):
     grid_surf = pygame.Surface((W, H), pygame.SRCALPHA)
     for (p1, p2, col, alpha, lw) in grid_segs:
         c = (col[0], col[1], col[2], alpha)
+        # Glow
+        pygame.draw.line(grid_surf, (col[0], col[1]//2, col[2]//2, alpha//2), (p1[0],p1[1]), (p2[0],p2[1]), lw + 4)
+        # Core
         pygame.draw.line(grid_surf, c, (p1[0],p1[1]), (p2[0],p2[1]), lw)
     surf.blit(grid_surf, (0,0))
+
+    # Draw coordinate labels
+    for i, p in enumerate(label_proj):
+        if p and p[2] < 100:
+            lbl = font_sm.render(labels[i], True, CYAN_DIM)
+            surf.blit(lbl, (p[0], p[1]))
 
     # ── Landing pad ───────────────────────────────────────────────────
     pad_proj = cam.project(PAD, drone_pos)
@@ -592,22 +634,30 @@ def render_scene(surf, cam, state, trail, rotor_angle):
         pygame.draw.polygon(surf, (15,15,30), pts2d)
         pygame.draw.polygon(surf, ORANGE, pts2d, 2)
 
-    # ── Buildings ─────────────────────────────────────────────────────
+    # ── Buildings (Tron style) ────────────────────────────────────────
     for (corners, edges, win_rows, bx, bz, sw, sd, sh) in BUILDINGS:
         proj = cam.project(corners, drone_pos)
         # draw edges
         for (i,j) in edges:
             if proj[i] and proj[j]:
                 depth = (proj[i][2]+proj[j][2])/2
-                fade = max(40, min(160, int(200 - depth*1.5)))
-                col = (0, fade//2, fade)
-                pygame.draw.line(surf, col, (proj[i][0],proj[i][1]),
-                                 (proj[j][0],proj[j][1]), 1)
+                scale = max(0.0, min(1.0, (250 - depth) / 250))
+                
+                core_col = (0, int(220*scale), int(255*scale))
+                glow_col = (0, int(80*scale), int(150*scale))
+                
+                p1, p2 = (proj[i][0],proj[i][1]), (proj[j][0],proj[j][1])
+                
+                if scale > 0.1:
+                    pygame.draw.line(surf, glow_col, p1, p2, 5) # thick glow
+                    pygame.draw.line(surf, core_col, p1, p2, 2) # bright core
+
         # window glow dots
         for wy in win_rows:
             wp = cam.project([(bx, wy, bz)], drone_pos)
             if wp[0] and wp[0][2] < 120:
-                pygame.draw.circle(surf, (180,220,255), (wp[0][0],wp[0][1]), 2)
+                scale = max(0.0, min(1.0, (120 - wp[0][2]) / 120))
+                pygame.draw.circle(surf, (0, int(255*scale), int(255*scale)), (wp[0][0],wp[0][1]), 3)
 
     # ── Trail ─────────────────────────────────────────────────────────
     if len(trail) > 1:
@@ -620,7 +670,7 @@ def render_scene(surf, cam, state, trail, rotor_angle):
                 pygame.draw.circle(surf, c, (pt[0],pt[1]), r)
 
     # ── Drone ─────────────────────────────────────────────────────────
-    centre, arms, body_corners, leg_tops, leg_bottoms, front_cam = \
+    centre, arms, body_corners, canopy, leg_tops, leg_bottoms, front_cam = \
         drone_points(state.yaw, state.pitch, state.roll)
     # offset to world position
     def w(p): return (p[0]+state.x, p[1]+state.y, p[2]+state.z)
@@ -628,12 +678,13 @@ def render_scene(surf, cam, state, trail, rotor_angle):
     arm_world = [w(a) for a in arms]
     ctr_world = w(centre)
     body_world = [w(b) for b in body_corners]
+    canopy_world = [w(c) for c in canopy]
     lt_world = [w(l) for l in leg_tops]
     lb_world = [w(l) for l in leg_bottoms]
     cam_world = w(front_cam)
 
     # Collect all points for projection
-    all_pts = [ctr_world] + arm_world + body_world + lt_world + lb_world + [cam_world]
+    all_pts = [ctr_world] + arm_world + body_world + canopy_world + lt_world + lb_world + [cam_world]
     # rotor ring points
     rotor_rings = []
     for arm in arm_world:
@@ -646,11 +697,12 @@ def render_scene(surf, cam, state, trail, rotor_angle):
     # Unpack projected indices
     ctr_p = proj_all[0]
     arm_p = proj_all[1:5]
-    body_p = proj_all[5:9]
-    lt_p = proj_all[9:13]
-    lb_p = proj_all[13:17]
-    cam_p = proj_all[17]
-    ring_start = 18
+    body_p = proj_all[5:11]
+    canopy_p = proj_all[11:15]
+    lt_p = proj_all[15:19]
+    lb_p = proj_all[19:23]
+    cam_p = proj_all[23]
+    ring_start = 24
 
     if ctr_p:
         # Depth-based scale factor
@@ -681,16 +733,19 @@ def render_scene(surf, cam, state, trail, rotor_angle):
                 pygame.draw.line(surf, DRONE_ARM, (ctr_p[0],ctr_p[1]), (ap[0],ap[1]), arm_thickness)
                 pygame.draw.line(surf, (40,90,160), (ctr_p[0],ctr_p[1]), (ap[0],ap[1]), max(1,int(1.5*scale)))
 
-        # ── Body plate (filled polygon) ──────────────────────────────
+        # ── Body plate (octagonal) ──────────────────────────────
         valid_body = [p for p in body_p if p]
         if len(valid_body) >= 3:
             body_2d = [(p[0],p[1]) for p in valid_body]
             pygame.draw.polygon(surf, (15, 25, 50), body_2d)
             pygame.draw.polygon(surf, DRONE_BODY, body_2d, max(1,int(2*scale)))
-            if body_p[0] and body_p[2]:
-                pygame.draw.line(surf, (50,100,180), (body_p[0][0],body_p[0][1]), (body_p[2][0],body_p[2][1]), 1)
-            if body_p[1] and body_p[3]:
-                pygame.draw.line(surf, (50,100,180), (body_p[1][0],body_p[1][1]), (body_p[3][0],body_p[3][1]), 1)
+            
+        # ── Canopy (above body) ────────────────────────────────
+        valid_canopy = [p for p in canopy_p if p]
+        if len(valid_canopy) >= 3:
+            canopy_2d = [(p[0],p[1]) for p in valid_canopy]
+            pygame.draw.polygon(surf, (30, 100, 200, 150), canopy_2d) # semi-trans
+            pygame.draw.polygon(surf, CYAN, canopy_2d, 1)
 
         # ── Motor housings ───────────────────────────────────────────
         motor_r = max(3, int(6*scale))
@@ -753,8 +808,9 @@ def render_scene(surf, cam, state, trail, rotor_angle):
 # ══════════════════════════════════════════════════════════════════════
 
 def render_hud(surf, fonts, state, source, bci_label, bci_conf,
-               bci_features, bci_active, cam_name, fps):
+               bci_features, bci_active, cam_name, fps, click_regions=None):
     font, font_sm, font_lg, font_title = fonts
+    mx, my = pygame.mouse.get_pos()
 
     # ── Left telemetry panel ──────────────────────────────────────────
     PW, PH = 230, 260
@@ -818,23 +874,37 @@ def render_hud(surf, fonts, state, source, bci_label, bci_conf,
         asym = bci_features.get("mu_asym", 0)
 
         # Band power bars with movement annotations
+        # Mapping: T1=Left(2), T2=Right(3), T0=Forward(0), Hover=4
         bands = [
-            ("C3 μ", c3_mu,   CYAN,         "← LEFT"  if c3_mu > c4_mu else ""),
-            ("C4 μ", c4_mu,   (0,160,200),   "→ RIGHT" if c4_mu > c3_mu else ""),
-            ("C3 β", c3_beta, PURPLE,        "↑ FWD"   if c3_beta > 0.3 else ""),
-            ("C4 β", c4_beta, (120,40,200),  "↑ FWD"   if c4_beta > 0.3 else ""),
+            ("C3 μ", c3_mu,   CYAN,         "← LEFT",   2),
+            ("C4 μ", c4_mu,   (0,160,200),   "→ RIGHT",  3),
+            ("C3 β", c3_beta, PURPLE,        "↑ FORWARD",0),
+            ("C4 β", c4_beta, (120,40,200),  "■ HOVER",  4),
         ]
-        max_val = max(v for _,v,_,_ in bands) + 1e-9
-        for i, (lbl, val, col, move_hint) in enumerate(bands):
+        max_val = max(v for _,v,_,_,_ in bands) + 1e-9
+        for i, (lbl, val, col, move_hint, intent_id) in enumerate(bands):
             by2 = BY + 96 + i*42
-            lbl_s = font_sm.render(lbl, True, GREY)
+            
+            # Click region
+            rect = pygame.Rect(BX+8, by2-2, BW-16, 40)
+            is_hover = bci_active and rect.collidepoint(mx, my)
+            if is_hover:
+                pygame.draw.rect(surf, (60, 40, 80), rect, 0, 4)
+                if click_regions is not None:
+                    click_regions[intent_id] = rect
+
+            lbl_s = font_sm.render(lbl, True, WHITE if is_hover else GREY)
             surf.blit(lbl_s, (BX+10, by2))
             draw_bar(surf, BX+10, by2+14, BW-20, 10, val/max_val, col)
             val_s = font_sm.render(f"{val:.3f}", True, col)
             surf.blit(val_s, (BX+BW-70, by2))
+            
             # Movement annotation
-            if move_hint:
-                hint_col = GREEN if "LEFT" in move_hint or "RIGHT" in move_hint else YELLOW
+            if is_hover:
+                hint_s = font_sm.render(f"CLICK: {move_hint}", True, YELLOW)
+                surf.blit(hint_s, (BX+70, by2))
+            elif move_hint:
+                hint_col = GREEN if "LEFT" in move_hint or "RIGHT" in move_hint else CYAN_DIM
                 hint_s = font_sm.render(move_hint, True, hint_col)
                 surf.blit(hint_s, (BX+70, by2))
 
@@ -1034,6 +1104,11 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
 
     # Warning flash
     warn_text=""; warn_timer=0.
+    
+    # Clickable HUD regions
+    click_regions = {}
+
+    mouse_dragging = False
 
     print("\n[sim3d] Ready — T=Takeoff, ESC=Quit")
 
@@ -1065,6 +1140,10 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
                 elif event.key == pygame.K_c and not sig_map.menu_open:
                     cam.cycle()
                     warn_text=f"CAM: {cam.name}"; warn_timer=1.
+                elif event.key in (pygame.K_PLUS, pygame.K_EQUALS, pygame.K_KP_PLUS) and not sig_map.menu_open:
+                    cam.zoom(1); warn_text=f"ZOOM {cam.dist:.0f}"; warn_timer=0.5
+                elif event.key in (pygame.K_MINUS, pygame.K_KP_MINUS) and not sig_map.menu_open:
+                    cam.zoom(-1); warn_text=f"ZOOM {cam.dist:.0f}"; warn_timer=0.5
                 elif event.key == pygame.K_m:
                     sig_map.menu_open = not sig_map.menu_open
                     sig_map.selected_intent = None
@@ -1096,17 +1175,45 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
                     }
                     if event.key in intent_keys:
                         sig_map.selected_intent = intent_keys[event.key]
-            # Mouse click to select intent row in mapping menu
-            if event.type == pygame.MOUSEBUTTONDOWN and sig_map.menu_open:
+            # Mouse wheel zoom
+            if event.type == pygame.MOUSEWHEEL:
+                cam.zoom(event.y)   # y>0 = scroll up = zoom in
+            # Mouse click handling
+            if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = event.pos
-                MW2, MH2 = 520, 380
-                MX2 = W//2 - MW2//2
-                MY2 = H//2 - MH2//2
-                for i in range(5):
-                    row_y = MY2 + 110 + i * 44
-                    if MX2+10 <= mx <= MX2+MW2-10 and row_y <= my <= row_y+38:
-                        sig_map.selected_intent = i
-                        break
+                clicked_ui = False
+                
+                # Check mapping menu clicks
+                if sig_map.menu_open:
+                    MW2, MH2 = 520, 380
+                    MX2 = W//2 - MW2//2
+                    MY2 = H//2 - MH2//2
+                    for i in range(5):
+                        row_y = MY2 + 110 + i * 44
+                        if MX2+10 <= mx <= MX2+MW2-10 and row_y <= my <= row_y+38:
+                            sig_map.selected_intent = i
+                            clicked_ui = True
+                            break
+                    if MX2 <= mx <= MX2+MW2 and MY2 <= my <= MY2+MH2:
+                        clicked_ui = True
+
+                # Check BCI bar clicks in HUD
+                elif use_bci:
+                    for intent_id, rect in click_regions.items():
+                        if rect.collidepoint(mx, my):
+                            clicked_ui = True
+                            break
+                            
+                if not clicked_ui and event.button in (1, 3):
+                    mouse_dragging = True
+
+            if event.type == pygame.MOUSEBUTTONUP:
+                if event.button in (1, 3):
+                    mouse_dragging = False
+                    
+            if event.type == pygame.MOUSEMOTION:
+                if mouse_dragging:
+                    cam.rotate(event.rel[0], event.rel[1])
 
         # ── Keyboard flight input ─────────────────────────────────────
         keys = pygame.key.get_pressed()
@@ -1121,6 +1228,21 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
         if keys[pygame.K_d]:     yaw_in   =  1.
         kb_active = any([pitch, roll, yaw_in, throttle])
 
+        # ── Continuous Mouse Input on BCI Panels ──────────────────────
+        manual_bci = False
+        if use_bci and pygame.mouse.get_pressed()[0] and not sig_map.menu_open:
+            mx, my = pygame.mouse.get_pos()
+            for intent_id, rect in click_regions.items():
+                if rect.collidepoint(mx, my):
+                    bci_intent = intent_id
+                    bci_label = sig_map.INTENT_NAMES[intent_id]
+                    bci_conf = 1.0 # Manual override
+                    last_bci = time.time() + 0.1 # Lock out decoder while holding
+                    manual_bci = True
+                    warn_text = f"MANUAL: {bci_label}"
+                    warn_timer = 0.5
+                    break
+
         # ── BCI decode ────────────────────────────────────────────────
         if use_bci and decoder and (time.time()-last_bci) > BCI_INT:
             n = int(eeg_src.fs*0.5)
@@ -1131,7 +1253,7 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
         # ── Merge inputs ──────────────────────────────────────────────
         if kb_active:
             source = "KB"
-        elif use_bci and state.flying and bci_conf > 0.45:
+        elif use_bci and state.flying and (bci_conf > 0.45 or manual_bci):
             p,r,y,t2 = sig_map.get_command(bci_intent)
             pitch,roll,yaw_in,throttle = p,r,y,t2
             source = "BCI"
@@ -1157,9 +1279,10 @@ def run(use_bci=True, use_real_eeg=False, backend_name='sim'):
             pygame.draw.line(scan_surf, (0,0,0,18), (0,sy), (W,sy))
         screen.blit(scan_surf, (0,0))
 
-        render_scene(screen, cam, state, trail, rotor_angle)
+        render_scene(screen, cam, state, trail, rotor_angle, fonts[1])
+        click_regions.clear()
         render_hud(screen, fonts, state, source, bci_label, bci_conf,
-                   bci_features, use_bci, cam.name, fps)
+                   bci_features, use_bci, cam.name, fps, click_regions)
 
         # Mapping menu overlay
         if sig_map.menu_open:
