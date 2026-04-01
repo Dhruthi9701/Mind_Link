@@ -38,12 +38,17 @@ fi
 echo "What would you like to start?"
 echo -e "  ${GREEN}[1]${NC} Main Orchestrator (Full 5-Unit Pipeline)"
 echo -e "  ${GREEN}[2]${NC} 3D Pygame Simulator (Tron Style, Free Camera)"
-echo -e "  ${GREEN}[3]${NC} Pre-flight Hardware Checklist"
-echo -e "  ${GREEN}[4]${NC} Train Models (PhysioNet Dataset)"
-echo -e "  ${GREEN}[5]${NC} Run Latency Benchmark"
+echo -e "  ${CYAN}------------------- PRESENTATION TOOLS -------------------${NC}"
+echo -e "  ${GREEN}[3]${NC} Interactive 3D Quantum Visualization (Hilbert Space)"
+echo -e "  ${GREEN}[4]${NC} Generate Phase 1 Results (Charts, Metrics, Graphs)"
+echo -e "  ${GREEN}[5]${NC} ZZ Encoding Interactive Demo (Step-by-Step)"
+echo -e "  ${CYAN}------------------- SYSTEM UTILITIES -------------------${NC}"
+echo -e "  ${GREEN}[6]${NC} Pre-flight Hardware Checklist"
+echo -e "  ${GREEN}[7]${NC} Train Models (PhysioNet Dataset)"
+echo -e "  ${GREEN}[8]${NC} Run Latency Benchmark"
 echo -e "  ${YELLOW}[Q]${NC} Quit"
 echo ""
-read -p "Select an option [1-5]: " choice
+read -p "Select an option [1-8]: " choice
 
 case $choice in
     1)
@@ -55,14 +60,26 @@ case $choice in
         cd mindlink && ../$PYTHON_VENV drone_control/sim3d.py
         ;;
     3)
+        echo -e "${CYAN}[launching] Starting Interactive 3D Quantum Viz...${NC}"
+        cd mindlink/quantum_simulation && ../../$PYTHON_VENV quantum_3d_viz.py
+        ;;
+    4)
+        echo -e "${CYAN}[launching] Generating All Phase 1 Results...${NC}"
+        cd mindlink && ../$PYTHON_VENV results_for_phase1/run_all_visualizations.py
+        ;;
+    5)
+        echo -e "${CYAN}[launching] Starting ZZ Encoding Demo...${NC}"
+        cd mindlink && ../$PYTHON_VENV interactive_zz_demo.py
+        ;;
+    6)
         echo -e "${CYAN}[launching] Running Pre-flight Checklist...${NC}"
         $PYTHON_VENV $MAIN_SCRIPT --checklist
         ;;
-    4)
+    7)
         echo -e "${CYAN}[launching] Starting Training Pass...${NC}"
         $PYTHON_VENV $MAIN_SCRIPT --train
         ;;
-    5)
+    8)
         echo -e "${CYAN}[launching] Running Latency Benchmark...${NC}"
         # Run from mindlink dir for config access
         cd mindlink && ../$PYTHON_VENV main.py --benchmark
